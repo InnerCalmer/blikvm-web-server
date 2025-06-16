@@ -46,26 +46,28 @@ function apiVideoControl(req, res, next) {
       video
         .startService()
         .then((result) => {
-          ret.data.state = video.state;
+          ret.data.state = video.getstate();
+          ret.msg = 'video service started successfully';
           res.json(ret);
         })
         .catch((result) => {
           ret.code = ApiCode.INTERNAL_SERVER_ERROR;
           ret.msg = result.msg;
-          ret.data.state = video.state;
+          ret.data.state = video.getstate();
           res.json(ret);
         });
     } else if (action === 'stop') {
       video
         .closeService()
         .then((result) => {
-          ret.data.state = video.state;
+          ret.data.state = video.getstate();
+          ret.msg = 'video service stopped';
           res.json(ret);
         })
         .catch((result) => {
           ret.code = ApiCode.INTERNAL_SERVER_ERROR;
           ret.msg = result.msg;
-          ret.data.state = video.state;
+          ret.data.state = video.getstate();
           res.json(ret);
         });
     } else {
@@ -141,7 +143,7 @@ function apiResolutionChange(req, res, next) {
   const video = new Video();
   video.setResolution(resolution);
 
-  if (video.state === ModuleState.RUNNING) {
+  if (video.getstate() === ModuleState.RUNNING) {
     video
       .closeService() 
       .then(() => {
@@ -155,7 +157,7 @@ function apiResolutionChange(req, res, next) {
       .catch((result) => {
         ret.code = ApiCode.INTERNAL_SERVER_ERROR;
         ret.msg = result.msg;
-        ret.data.state = video.state;
+        ret.data.state = video.getstate();
         res.json(ret);
       });
   } else {
@@ -169,7 +171,7 @@ function apiResolutionChange(req, res, next) {
       .catch((result) => {
         ret.code = ApiCode.INTERNAL_SERVER_ERROR;
         ret.msg = result.msg;
-        ret.data.state = video.state;
+        ret.data.state = video.getstate();
         res.json(ret);
       });
   }
