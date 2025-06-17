@@ -24,7 +24,7 @@ import { CONFIG_PATH, UTF8 } from '../../common/constants.js';
 import { ApiCode, createApiObj } from '../../common/api.js';
 import Logger from '../../log/logger.js';
 import { ModuleState } from '../../common/enums.js';
-import { getHardwareType, executeCMD } from '../../common/tool.js';
+import { getHardwareType, getSreamerType, executeCMD } from '../../common/tool.js';
 import { HardwareType } from '../../common/enums.js';
 import { execSync } from 'child_process';
 
@@ -41,7 +41,9 @@ function apiVideoControl(req, res, next) {
   try {
     const ret = createApiObj();
     const action = req.query.action;
-    const video = new Video();
+    const hardwareType = getHardwareType();
+    const streamerType = getSreamerType();
+    const video = new Video(streamerType, hardwareType);
     if (action === 'start') {
       video
         .startService()
@@ -90,18 +92,20 @@ function apiDecodeChange(req, res, next) {
     return;
   }
 
-  const decode = req.query.decode;
-  const video = new Video();
+  const {decode} = req.body;
+  const hardwareType = getHardwareType();
+  const streamerType = getSreamerType();
+  const video = new Video(streamerType, hardwareType);
   video.setDecodeParam(decode);
-
-  if (video.state === ModuleState.RUNNING) {
+  console.log("video state : ", video.getstate(), "set decode : ", decode);
+  if (video.getstate() === ModuleState.RUNNING) {
     video
-      .closeService() 
+      .closeService()
       .then(() => {
-        return video.startService(); 
+        return video.startService();
       })
       .then(() => {
-        ret.code = ApiCode.SUCCESS;
+        ret.code = ApiCode.OK;
         ret.msg = 'decode changed and service restarted successfully';
         res.json(ret);
       })
@@ -115,7 +119,7 @@ function apiDecodeChange(req, res, next) {
     video
       .startService()
       .then(() => {
-        ret.code = ApiCode.SUCCESS;
+        ret.code = ApiCode.OK;
         ret.msg = 'Service started with new resolution successfully';
         res.json(ret);
       })
@@ -140,17 +144,19 @@ function apiResolutionChange(req, res, next) {
   }
 
   const resolution = req.query.resolution;
-  const video = new Video();
+  const hardwareType = getHardwareType();
+  const streamerType = getSreamerType();
+  const video = new Video(streamerType, hardwareType);
   video.setResolution(resolution);
 
   if (video.getstate() === ModuleState.RUNNING) {
     video
-      .closeService() 
+      .closeService()
       .then(() => {
-        return video.startService(); 
+        return video.startService();
       })
       .then(() => {
-        ret.code = ApiCode.SUCCESS;
+        ret.code = ApiCode.OK;
         ret.msg = 'Resolution changed and service restarted successfully';
         res.json(ret);
       })
@@ -164,7 +170,7 @@ function apiResolutionChange(req, res, next) {
     video
       .startService()
       .then(() => {
-        ret.code = ApiCode.SUCCESS;
+        ret.code = ApiCode.OK;
         ret.msg = 'Service started with new resolution successfully';
         res.json(ret);
       })
@@ -181,7 +187,9 @@ function apiResolutionChange(req, res, next) {
 function apiVideoConfig(req, res, next) {
   try {
     const ret = createApiObj();
-    const video = new Video();
+    const hardwareType = getHardwareType();
+    const streamerType = getSreamerType();
+    const video = new Video(streamerType, hardwareType);
     const action = req.query.action;
     if (action === 'get') {
       ret.data = video.getVideoConfig();
@@ -201,46 +209,146 @@ function apiVideoConfig(req, res, next) {
 
 function apiGetVideoState(req, res, next) {
   const ret = createApiObj();
-  const video = new Video();
-  video.getVideoState()
-    .then(response => {
-      ret.msg = 'get video state ok';
+  const hardwareType = getHardwareType();
+  const streamerType = getSreamerType();
+  const video = new Video(streamerType, hardwareType);
+  const mode = video.getVideoConfig().decode;
+  console.log('mode:', mode);
+  if (streamerType === 2) {
+    const response = video.getVideoTimings()
+    if (response.error || (response.status !== 0)) {
+      // ret.msg = 'get video state no input';
+      const width = 0;
+      const height = 0;
+      const fps = 0;
       ret.data = {
+        isActive: video._tempState,
+        streamer: streamerType,
+        mode: mode,
+        width: width,
+        height: height,
+        capturedFps: fps,
+        queuedFps: 0
+      };
+    } else {
+      const widthMatch = response.stdout.match(/Active width:\s*(\d+)/);
+      const heightMatch = response.stdout.match(/Active height:\s*(\d+)/);
+      const fpsMatch = response.stdout.match(/\((\d+\.\d+)\s*frames per second\)/);
+
+      const width = widthMatch ? widthMatch[1] : '0';
+      const height = heightMatch ? heightMatch[1] : '0';
+      const fps = fpsMatch ? fpsMatch[1] : '0';
+
+      // console.log('width:', width);
+      // console.log('height:', height);
+      // console.log('fps:', fps);
+      ret.data = {
+        isActive: video._tempState,
+        streamer: streamerType,
+        mode: mode,
+        width: Number(width),
+        height: Number(height),
+        capturedFps: Number(fps),
+        queuedFps: 0
+      };
+    }
+    res.json(ret);
+  } else if (streamerType === 1) {
+    video.getVideoState()
+      .then(response => {
+        ret.msg = 'get video state ok';
+        ret.data = {
+          isActive: true,
+          streamer: streamerType,
+          mode: mode,
+          width: response.result.source.resolution.width,
+          height: response.result.source.resolution.height,
+          capturedFps: response.result.source.captured_fps,
+          queuedFps: response.result.stream.queued_fps
+        };
+        res.json(ret);
+      })
+      .catch(error => {
+        next(error);
+      });
+
+  }
+
+}
+
+async function wsGetVideoState() {
+  try {
+    const hardwareType = getHardwareType();
+    const streamerType = getSreamerType();
+    const video = new Video(streamerType, hardwareType);
+    const mode = video.getVideoConfig().decode;
+    if (video.getstate() !== ModuleState.RUNNING) {
+      const ret_stop = {
+        isActive: false,
+        streamer: streamerType,
+        mode: mode,
+        width: 0,
+        height: 0,
+        capturedFps: 0,
+        queuedFps: 0,
+      }
+      return ret_stop;
+    }
+    if (streamerType === 2) {
+      const response = video.getVideoTimings();
+      if (response.error || (response.status !== 0)) {
+        // console.log("error  : ", response.error, "status: ", response.status);
+        // ret.msg = 'get video state no input';
+        const width = 0;
+        const height = 0;
+        const fps = 0;
+        const ret = {
+          isActive: video._tempState,
+          streamer: streamerType,
+          mode: mode,
+          width: width,
+          height: height,
+          capturedFps: fps,
+          queuedFps: 0
+        };
+        return ret;
+      } else {
+        
+        const widthMatch = response.stdout.match(/Active width:\s*(\d+)/);
+        const heightMatch = response.stdout.match(/Active height:\s*(\d+)/);
+        const fpsMatch = response.stdout.match(/\((\d+\.\d+)\s*frames per second\)/);
+
+        const width = widthMatch ? widthMatch[1] : '0';
+        const height = heightMatch ? heightMatch[1] : '0';
+        const fps = fpsMatch ? fpsMatch[1] : '0';
+
+        // console.log('width:', width);
+        // console.log('height:', height);
+        // console.log('fps:', fps);
+        const ret = {
+          isActive: video._tempState,
+          streamer: streamerType,
+          mode: mode,
+          width: Number(width),
+          height: Number(height),
+          capturedFps: Number(fps),
+          queuedFps: 0
+        };
+        return ret;
+      }
+    } else if (streamerType === 1) {
+      const response = await video.getVideoState();
+      const ret = {
+        isActive: true,
+        streamer: streamerType,
+        mode: mode,
         width: response.result.source.resolution.width,
         height: response.result.source.resolution.height,
         capturedFps: response.result.source.captured_fps,
         queuedFps: response.result.stream.queued_fps
       };
-      res.json(ret);
-    })
-    .catch(error => {
-      next(error);
-    });
-}
-
-
-async function wsGetVideoState() {
-  try {
-    const video = new Video();
-    if (video.getstate() !== ModuleState.RUNNING) {
-      const ret_stop = {
-        isActive: false,
-        width: 0,
-        height: 0,
-        capturedFps: 0,
-        queuedFps: 0
-      }
-      return ret_stop;
+      return ret;
     }
-    const response = await video.getVideoState();
-    const ret = {
-      isActive: true,
-      width: response.result.source.resolution.width,
-      height: response.result.source.resolution.height,
-      capturedFps: response.result.source.captured_fps,
-      queuedFps: response.result.stream.queued_fps
-    };
-    return ret;
   } catch (error) {
     logger.error(`get video state error: ${error}`);
   }
@@ -250,12 +358,12 @@ function apiStartRecording(req, res, next) {
   try {
     const recorder = new MJPEGStreamRecorder();
     recorder.startRecording()
-    .then(() => {
-      logger.info('Recording started successfully');
-    })
-    .catch((error) => {
-      logger.error('Failed to start recording:', error.message);
-    });
+      .then(() => {
+        logger.info('Recording started successfully');
+      })
+      .catch((error) => {
+        logger.error('Failed to start recording:', error.message);
+      });
     const ret = createApiObj();
     ret.msg = 'Recording started successfully.';
     res.json(ret);
@@ -293,7 +401,9 @@ function apiRecording(req, res, next) {
 
 async function apiSnapshot(req, res, next) {
   try {
-    const video = new Video();
+    const hardwareType = getHardwareType();
+    const streamerType = getSreamerType();
+    const video = new Video(streamerType, hardwareType);
     const imageBuffer = await video.getSnapshotImage(next);
     if (imageBuffer) {
       res.writeHead(200, { 'Content-Type': 'image/jpeg' });
@@ -302,7 +412,7 @@ async function apiSnapshot(req, res, next) {
   } catch (error) {
     next(error);
   }
-} 
+}
 
 function parseEdidOutput(output) {
   const lines = output.split('\n');
@@ -316,7 +426,7 @@ function parseEdidOutput(output) {
 
       // 只保留括号里的内容，例如将 "0x8888 (34952)" 转为 "34952"
       const match = value.match(/\((\d+)\)/);
-      if ( (normalizedKey === 'product_id' || normalizedKey === 'serial_number' )  && match) {
+      if ((normalizedKey === 'product_id' || normalizedKey === 'serial_number') && match) {
         finalValue = match[1]; // 提取括号内的数字字符串
       }
 
@@ -332,8 +442,8 @@ function apiEdidInfo(req, res, next) {
   try {
     const ret = createApiObj();
     const output = execSync('./lib/kvmd-edidconf 2>&1').toString();
-    const parsedOutput = parseEdidOutput(output); 
-    ret.data = parsedOutput; 
+    const parsedOutput = parseEdidOutput(output);
+    ret.data = parsedOutput;
     ret.msg = 'EDID information retrieved successfully';
     res.json(ret);
   } catch (error) {
@@ -345,12 +455,12 @@ function apiEdidInfo(req, res, next) {
 function apiEdidSet(req, res, next) {
   try {
     const ret = createApiObj();
-    const {manufacturer_id, product_id, serial_number, monitor_name } = req.body;
+    const { manufacturer_id, product_id, serial_number, monitor_name } = req.body;
     const cmd = `./lib/kvmd-edidconf --set-monitor-name=${monitor_name} --set-mfc-id=${manufacturer_id} --set-product-id=${product_id} --set-serial=${serial_number} --apply`;
     execSync(cmd);
     const output = execSync('./lib/kvmd-edidconf 2>&1').toString();
-    const parsedOutput = parseEdidOutput(output); 
-    ret.data = parsedOutput; 
+    const parsedOutput = parseEdidOutput(output);
+    ret.data = parsedOutput;
     ret.msg = 'EDID information set successfully';
     res.json(ret);
   } catch (error) {
@@ -359,4 +469,4 @@ function apiEdidSet(req, res, next) {
 }
 
 
-export { apiVideoControl, apiVideoConfig, apiGetVideoState, wsGetVideoState, apiRecording, apiResolutionChange,apiSnapshot, apiEdidInfo,  apiEdidSet};
+export { apiVideoControl, apiVideoConfig, apiGetVideoState, wsGetVideoState, apiRecording, apiResolutionChange, apiDecodeChange, apiSnapshot, apiEdidInfo, apiEdidSet };

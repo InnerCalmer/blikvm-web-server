@@ -44,6 +44,8 @@ class ModuleApp extends Module {
 
   _ManualStop = false;
 
+  _tempState = false;
+
   startService() {
     return new Promise((resolve, reject) => {
       const { checkResult, checkMessage } = this._startServiceCheck();
@@ -63,8 +65,12 @@ class ModuleApp extends Module {
       });
 
       this._app.stdout.on('data', (data) => {
-        // logger.trace(`${this._name} API stdout: ${data}`);
-       console.log(data.toString());  // 将数据写入控制台
+        if (data.toString().includes("SignalON")) {
+          this._tempState = true;
+        } else if (data.toString().includes("SignalOFF")) {
+          this._tempState = false;
+        }
+        console.log(data.toString());  // 将数据写入控制台
       });
 
       this._app.stderr.on('data', (data) => {
@@ -92,7 +98,7 @@ class ModuleApp extends Module {
             this.startService().catch((err) => {
               logger.error(`Failed to restart ${this._name} API: ${err.msg}`);
             });
-          }, 1000); 
+          }, 1000);
         }
         if (code === 1) {
           this._state = ModuleState.ERROR;
@@ -102,7 +108,7 @@ class ModuleApp extends Module {
           reject(result);
         }
       });
-      
+
       process.on('exit', () => {
         if (this._app) {
           this._app.kill('SIGTERM'); // 发送 SIGTERM 终止子进程
@@ -127,20 +133,22 @@ class ModuleApp extends Module {
       const { checkResult, checkMessage } = this._closeServiceCheck();
 
       const result = { name: this._name, msg: '' };
-
+      // console.log("closeService...");
       if (checkResult === false) {
         result.msg = checkMessage;
+        console.log("result.msg...", result.msg);
         reject(result);
         return;
       }
-
+      // console.log("prepare to kill child process...");
       this._app.kill('SIGTERM');
       this._state = ModuleState.STOPPING;
       this._ManualStop = true;
       const startTime = Date.now();
-
+      // console.log("prepare to check state...");
       const checkState = () => {
         if (this._state === ModuleState.STOPPED) {
+          this._tempState = false;
           resolve(result);
         } else {
           const currentTime = Date.now();
@@ -155,6 +163,7 @@ class ModuleApp extends Module {
       };
 
       checkState();
+      // console.log("close Service..........");
     });
   }
 

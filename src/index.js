@@ -69,10 +69,11 @@ const httpServer = new HttpServer();
 
 httpServer.startService().then((result) => {
   // startHid();
+  startWebServer();
   startVideo();
   // const kvmdmain = new KVMDMain();
   // kvmdmain.startService();
-  startWebServer();
+  
   // startSwitch();
   // const atx = new ATX();
   // setTimeout(() => {

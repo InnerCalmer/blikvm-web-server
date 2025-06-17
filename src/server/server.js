@@ -296,6 +296,14 @@ class HttpServer {
       secure: false,
     }));
 
+    // 👇 加在 app.use('/video', ...) 后面即可
+    app.use('/gstreamer', createProxyMiddleware({
+      target: 'https://127.0.0.1:8889', // MediaMTX监听端口
+      changeOrigin: true,
+      secure: false,
+    }));
+
+
     app.use('/tus', createProxyMiddleware({
       target: `http://127.0.0.1:${msd.tusPort}`,
       changeOrigin: false,

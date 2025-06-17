@@ -26,7 +26,7 @@ import { HardwareType } from '../../common/enums.js';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
-import {Notification, NotificationType} from '../../modules/notification.js';
+import { Notification, NotificationType } from '../../modules/notification.js';
 import si from 'systeminformation';
 import Logger from '../../log/logger.js';
 
@@ -44,28 +44,47 @@ function apiReboot(req, res, next) {
 
 function readSerialNumber() {
   return new Promise((resolve, reject) => {
-    fs.readFile('/proc/device-tree/serial-number', 'utf8', (err, data) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(data.replace(/\u0000/g, '').trim());
-    });
+    const hdType = getHardwareType();
+    let filePath = '';
+    if (hdType === HardwareType.OrangePiCM4) {
+      filePath = '/proc/cpuinfo';
+      fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+          return reject(err);
+        }
+        // 从 /proc/cpuinfo 中提取 Serial 行
+        const match = data.match(/^Serial\s*:\s*([0-9a-fA-F]+)/m);
+        if (match && match[1]) {
+          resolve(match[1].trim());
+        } else {
+          reject(new Error('Serial number not found in /proc/cpuinfo'));
+        }
+      });
+    } else {
+      filePath = '/proc/device-tree/serial-number';
+      fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(data.replace(/\u0000/g, '').trim());
+      });
+    }
   });
 }
 
 function apiGetSystemInfo(req, res, next) {
   try {
-    Promise.all([si.system(), si.cpu(),si.networkInterfaces(), si.osInfo(), readSerialNumber(), getSystemInfo(),si.mem(), si.diskLayout(),si.fsSize(),si.time() ])
-      .then(([systemData, cpuData, networkData, osData, serialNumber, systemInfo,memData, disks, fsData,siTime]) => {
+    Promise.all([si.system(), si.cpu(), si.networkInterfaces(), si.osInfo(), readSerialNumber(), getSystemInfo(), si.mem(), si.diskLayout(), si.fsSize(), si.time()])
+      .then(([systemData, cpuData, networkData, osData, serialNumber, systemInfo, memData, disks, fsData, siTime]) => {
         const netDataFilter = networkData.filter(netInterface => netInterface.iface !== 'lo')
-        .map(netInterface => ({
-          iface: netInterface.iface,   
-          ip4: netInterface.ip4,       
-          mac: netInterface.mac,
-          virtual: netInterface.virtual,
-          type: netInterface.type,
-          dhcp: netInterface.dhcp    
-        }));
+          .map(netInterface => ({
+            iface: netInterface.iface,
+            ip4: netInterface.ip4,
+            mac: netInterface.mac,
+            virtual: netInterface.virtual,
+            type: netInterface.type,
+            dhcp: netInterface.dhcp
+          }));
         const osDataFilter = {
           platform: osData.platform,
           distro: osData.distro,
@@ -82,22 +101,22 @@ function apiGetSystemInfo(req, res, next) {
 
         // Find the SD card by checking for 'mmcblk0'
         let sdTotalSpace = 0;
-        const sdCard = disks.find(disk => disk.device === '/dev/mmcblk0'); 
-        if (sdCard) {
-          sdTotalSpace = sdCard.size;
-        }
-        let sdAvailableSpace = fsData
-        .filter(fs => fs.fs.startsWith('/dev/mmcblk0'))
-        .reduce((total, partition) => total + partition.available, 0);
+        // const sdCard = disks.find(disk => disk.device === '/dev/mmcblk0'); 
+        // if (sdCard) {
+        //   sdTotalSpace = sdCard.size;
+        // }
+        // let sdAvailableSpace = fsData
+        // .filter(fs => fs.fs.startsWith('/dev/mmcblk0'))
+        // .reduce((total, partition) => total + partition.available, 0);
         const { server } = JSON.parse(fs.readFileSync(CONFIG_PATH, UTF8));
 
-        const hdType  = getHardwareType();
+        const hdType = getHardwareType();
         let deviceVersion = '';
-        if( hdType === HardwareType.MangoPi){
+        if (hdType === HardwareType.MangoPi) {
           deviceVersion = "BliKVM v4 Allwinner";
-        }else if(hdType === HardwareType.PI4B ){
+        } else if (hdType === HardwareType.PI4B) {
           deviceVersion = "BliKVM v3 HAT";
-        }else if( hdType === HardwareType.CM4 ){
+        } else if (hdType === HardwareType.CM4) {
           deviceVersion = "BliKVM CM4";
         }
 
@@ -107,7 +126,7 @@ function apiGetSystemInfo(req, res, next) {
           timezone: siTime.timezone,
           timezoneName: siTime.timezoneName,
           temperature: systemInfo.temperature,
-          auth:{
+          auth: {
             isEnabled: server.auth
           },
           board: {
@@ -122,32 +141,32 @@ function apiGetSystemInfo(req, res, next) {
               manufacturer: cpuData.manufacturer || 'Unknown',
               processor: cpuData.brand || 'Unknown',
               revision: cpuData.revision || 'Unknown',
-              vendor: cpuData.vendor || 'Unknown',            
+              vendor: cpuData.vendor || 'Unknown',
             }
           },
           os: osDataFilter,
-          mem:{
+          mem: {
             total: memData.total,
             actual: memData.free
           },
-          storage:{
-            total: sdTotalSpace,
-            actual: sdAvailableSpace
+          storage: {
+            total: 0,
+            actual: 0
           },
           network: netDataFilter
         };
         const hardwareType = getHardwareType();
-        if(hardwareType === HardwareType.MangoPi){
+        if (hardwareType === HardwareType.MangoPi) {
           returnObject.data.board.manufacturer = "MangoPi";
           returnObject.data.board.model = "MangoPi MCore";
           returnObject.data.board.serial = serialNumber;
           returnObject.data.board.type = "mangopi";
           returnObject.data.board.cpu.manufacturer = "Allwinner Technology Co";
           returnObject.data.board.cpu.processor = "H316 or H616";
-        }else if(hardwareType === HardwareType.PI4B || hardwareType === HardwareType.CM4){
+        } else if (hardwareType === HardwareType.PI4B || hardwareType === HardwareType.CM4) {
           returnObject.data.board.type = systemData.raspberry.type;
         }
-        
+
         res.json(returnObject);
       })
       .catch(error => {
@@ -165,13 +184,13 @@ function apiGetDevice(req, res, next) {
     const hardwareType = getHardwareType();
     let type = '';
     let deviceType = '';
-    if( hardwareType === HardwareType.MangoPi){
-      type ='mangoPi';
+    if (hardwareType === HardwareType.MangoPi) {
+      type = 'mangoPi';
       deviceType = "BliKVM v4 Allwinner";
-    }else if(hardwareType === HardwareType.PI4B ){
+    } else if (hardwareType === HardwareType.PI4B) {
       type = 'pi';
       deviceType = "BliKVM v3 HAT";
-    }else if( hardwareType === HardwareType.CM4 ){
+    } else if (hardwareType === HardwareType.CM4) {
       type = 'pi';
       deviceType = "BliKVM CM4";
     }
@@ -207,7 +226,7 @@ const apiGetLogs = async (req, res, next) => {
         }
         return null;
       })
-      .filter(Boolean) 
+      .filter(Boolean)
       .sort((a, b) => b.mtime - a.mtime)[0]?.file;
 
     if (!latestLogFile) {

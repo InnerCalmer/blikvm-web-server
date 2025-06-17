@@ -27,7 +27,7 @@ import { fileExists, getHardwareType } from '../../common/tool.js';
 import { StreamerType, HardwareType } from '../../common/enums.js';
 import http from 'http';
 
-import { execSync, exec } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 
 class Video extends ModuleApp {
   static _instance = null;
@@ -58,7 +58,7 @@ class Video extends ModuleApp {
     const { video } = JSON.parse(fs.readFileSync(CONFIG_PATH, UTF8));
     this._name = 'video';
     this._port = this.getVideoConfig().port;
-    if (this._streamerType == StreamerType.Ustreamer) {
+    if (this._streamerType === StreamerType.Ustreamer) {
       this._bin = video.ustreamer.bin;
       let port = video.ustreamer.port;
       let quality = video.ustreamer.quality;
@@ -100,17 +100,14 @@ class Video extends ModuleApp {
         this._param = [`--format=MJPEG`, `--device=/dev/video1`, `--resolution=1920x1080`, `--host=0.0.0.0` `--port=${port}`, `--drop-same-frames=30 &`];
       }
 
-    } else if (this._streamerType == StreamerType.Gstreamer) {
+    } else if (this._streamerType === StreamerType.Gstreamer) {
       this._bin = video.gstreamer.bin;
       let port = video.gstreamer.port;
+      let fps = video.gstreamer.fps;
       let kbps = video.gstreamer.kbps;
       let gop = video.gstreamer.gop;
       if (this._hardwareType === HardwareType.OrangePiCM4) {
-        if (video.gstreamer.decode === "H264") {
-          this._param = [`./lib/rk3566/test.py`];
-        } else {
-          this._param = [`./lib/rk3566/test.py`];
-        }
+        this._param = [`./lib/rk3566/test.py`, String(video.gstreamer.decode), String(kbps), String(gop)];
       }
     } else {
       console.log('Unknown streamer type. No action performed.');
@@ -119,7 +116,7 @@ class Video extends ModuleApp {
       console.error("Error: No binary found for streamer.");
       return;
     }
-    
+
   }
 
   _init() {
@@ -129,49 +126,67 @@ class Video extends ModuleApp {
   setDecodeParam(decode) {
     const configPath = CONFIG_PATH;
     const config = JSON.parse(fs.readFileSync(configPath, UTF8));
-    if (this._streamerType == StreamerType.Gstreamer) {
+    if (this._streamerType === StreamerType.Gstreamer) {
       config.video.gstreamer.decode = decode;
-    } 
+    }
+    // console.log("decode: ", decode, "config.video.gstreamer.decode: ", config.video.gstreamer.decode);
+
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), UTF8);
-    runVideoStreamer();
+    this.runVideoStreamer();
   }
 
   setResolution(resolution) {
     const configPath = CONFIG_PATH;
     const config = JSON.parse(fs.readFileSync(configPath, UTF8));
-    if (this._streamerType == StreamerType.Gstreamer) {
+    if (this._streamerType === StreamerType.Gstreamer) {
       // config.video.gstreamer.resolution = resolution;
-    } else if (this._streamerType == StreamerType.Ustreamer) {
+    } else if (this._streamerType === StreamerType.Ustreamer) {
       config.video.ustreamer.resolution = resolution;
     }
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), UTF8);
-    runVideoStreamer();
+    this.runVideoStreamer();
+    
   }
 
   getVideoConfig() {
     const { video } = JSON.parse(fs.readFileSync(CONFIG_PATH, UTF8));
     const videoConfig = {
       ...(this._streamerType === StreamerType.Ustreamer && {
+        streamer: StreamerType.Ustreamer,
         port: video.ustreamer.port,
         fps: video.ustreamer.fps,
         quality: video.ustreamer.quality,
         kbps: video.ustreamer.kbps,
         gop: video.ustreamer.gop,
-        resolution: video.ustreamer.resolution
+        resolution: video.ustreamer.resolution,
+        decode: video.ustreamer.decode
       }),
 
       // Gstreamer通用配置
       ...(this._streamerType === StreamerType.Gstreamer && {
+        streamer: StreamerType.Gstreamer,
         port: video.gstreamer.port,
+        fps: video.gstreamer.fps,
+        quality: video.gstreamer.quality,
         kbps: video.gstreamer.kbps,
         gop: video.gstreamer.gop,
-        decode: video.gstreamer.decode,
+        resolution: video.gstreamer.resolution,
+        decode: video.gstreamer.decode
       })
     };
     if (getHardwareType() === HardwareType.MangoPi) {
       videoConfig.support_resolution = this._v4_support_resolution;
     }
     return videoConfig;
+  }
+
+  getVideoTimings() {
+    // const response  = execSync('v4l2-ctl -d /dev/v4l-subdev3 --query-dv-timings').toString();
+    const response = spawnSync('v4l2-ctl', ['-d', '/dev/v4l-subdev3', '--query-dv-timings'], {
+      encoding: 'utf8',
+    });
+
+    return response;
   }
 
   getVideoState() {
@@ -194,20 +209,25 @@ class Video extends ModuleApp {
   setVideoConfig(videoConfig) {
     const configPath = CONFIG_PATH;
     const config = JSON.parse(fs.readFileSync(configPath, UTF8));
-    if (this._streamerType == StreamerType.Gstreamer) {
+    if (this._streamerType === StreamerType.Gstreamer) {
+      config.video.gstreamer.fps = videoConfig.fps;
+      config.video.gstreamer.quality = videoConfig.quality;
       config.video.gstreamer.kbps = videoConfig.kbps;
       config.video.gstreamer.gop = videoConfig.gop;
       config.video.gstreamer.decode = videoConfig.decode;
-    } else if (this._streamerType == StreamerType.Ustreamer) { 
+    } else if (this._streamerType === StreamerType.Ustreamer) {
       config.video.ustreamer.fps = videoConfig.fps;
       config.video.ustreamer.quality = videoConfig.quality;
       config.video.ustreamer.kbps = videoConfig.kbps;
       config.video.ustreamer.gop = videoConfig.gop;
+      config.video.ustreamer.decode = videoConfig.decode;
     }
+    // console.log("decode: ", videoConfig.decode, "config.video.gstreamer.decode: ", config.video.gstreamer.decode);
 
     // this._param = [config.video.param.pi.bin, config.video.param.pi.port, config.video.param.fps, config.video.param.pi.quality, config.video.param.pi.kbps, config.video.param.pi.gop, config.video.param.pi.resolution];
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), UTF8);
-    runVideoStreamer();
+    this.runVideoStreamer();
+
   }
 
   getSnapshotUrl() {

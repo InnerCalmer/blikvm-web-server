@@ -21,7 +21,7 @@
 *****************************************************************************/
 import { apiATXClick, apiATXState } from './atx.route.js';
 import state from './state.route.js';
-import { apiVideoControl, apiVideoConfig, apiGetVideoState, apiRecording, apiResolutionChange, apiSnapshot, apiEdidInfo,  apiEdidSet } from './video.route.js';
+import { apiVideoControl, apiVideoConfig, apiGetVideoState, apiRecording, apiResolutionChange, apiDecodeChange, apiSnapshot, apiEdidInfo,  apiEdidSet } from './video.route.js';
 import KVMDMain from './kvmd_main.route.js';
 import { apiEnableHID, apiChangeMode, apiGetStatus, apiKeyboardPaste, apiKeyboardShortcuts, apiGetShortcutsConfig, apiHIDLoopBlock, apiHIDLoopStatus, apiKeyboardPasteLanguage } from './hid.route.js';
 import {
@@ -72,8 +72,9 @@ const routes = [
   
   { path: '/api/video', handler: apiVideoControl, method: 'post' },
   { path: '/api/video/config', handler: apiVideoConfig, method: 'post' },
-  { path: '/api/video/state', handler: apiGetVideoState, method: 'post' },
+  { path: '/api/video/state', handler: apiGetVideoState, method: 'get' },
   { path: '/api/video/record', handler: apiRecording, method: 'post' },
+  { path: '/api/video/videomodechange', handler: apiDecodeChange, method: 'post' },  
   { path: '/api/video/resolution', handler: apiResolutionChange, method: 'post' },
   { path: '/api/video/screenshot', handler: apiSnapshot, method: 'get' },
   { path: '/api/video/edid', handler: apiEdidInfo, method: 'get' },

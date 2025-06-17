@@ -1,5 +1,6 @@
 import gi
 import time
+import argparse # 导入 argparse 模块
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 import subprocess
@@ -9,6 +10,25 @@ import re
 
 # 初始化GStreamer
 Gst.init(None)
+
+# 创建 ArgumentParser 对象
+parser = argparse.ArgumentParser(description="GStreamer RTSP 推流程序")
+
+#添加 codec 参数，用于选择编码器
+parser.add_argument("--codec", type=str, default="h265", choices=["h264", "h265"],
+                    help="视频编码器类型 (h264 或 h265). 默认值: h265")
+
+# 添加 bitrate 参数
+parser.add_argument("--bitrate", type=int, default=3000,
+                    help="视频编码器的最大比特率 (bps). 默认值: 3000000")
+# 添加 gop 参数
+parser.add_argument("--gop", type=int, default=60,
+                    help="视频编码器的 GOP (Group of Pictures) 大小. 默认值: 60")
+
+# 解析命令行参数
+args = parser.parse_args()
+
+print(f"Codec: {args.codec}, gop : {args.gop}: bitrate: {args.bitrate}", flush=True)
 
 # 创建管道
 pipeline = Gst.Pipeline.new("mypipeline")
@@ -20,16 +40,33 @@ video_filter = Gst.ElementFactory.make("capsfilter", "video_filter")
 video_filter.set_property("caps", video_caps)
 
 queue1 = Gst.ElementFactory.make("queue", "queue1")
-mpph265enc = Gst.ElementFactory.make("mpph265enc", "mpph265enc")
-mpph265enc.set_property("qp-init", 50)
-mpph265enc.set_property("qp-max", 51)
-mpph265enc.set_property("qp-min", 30)
-mpph265enc.set_property("rc-mode", 0)
-mpph265enc.set_property("gop", 60)
-mpph265enc.set_property("bps-max", 3000000)
+# mpph265enc = Gst.ElementFactory.make("mpph265enc", "mpph265enc")
+
+# 根据命令行参数动态选择和创建视频编码器和解析器
+if args.codec == 'h265':
+    video_encoder = Gst.ElementFactory.make("mpph265enc", "video_encoder")
+    video_parser = Gst.ElementFactory.make("h265parse", "video_parser")
+    print("Using H.265 (mpph265enc) encoder.", flush=True)
+else: # args.codec == 'h264'
+    video_encoder = Gst.ElementFactory.make("mpph264enc", "video_encoder")
+    video_parser = Gst.ElementFactory.make("h264parse", "video_parser")
+    print("Using H.264 (mpph264enc) encoder.", flush=True)
+
+# 检查编码器是否成功创建
+if not video_encoder or not video_parser:
+    print(f"Error: Failed to create {args.codec} encoder/parser elements. Check GStreamer installation.", flush=True)
+    exit(1)
+# mpph265enc.set_property("qp-init", 50)
+# mpph265enc.set_property("qp-max", 51)
+# mpph265enc.set_property("qp-min", 30)
+video_encoder.set_property("rc-mode", 1)
+# mpph265enc.set_property("gop", 60)
+# mpph265enc.set_property("bps-max", 3000000)
+video_encoder.set_property("gop", args.gop) # 使用解析到的 gop 参数
+video_encoder.set_property("bps", args.bitrate) # 设置目标比特率
 
 queue2 = Gst.ElementFactory.make("queue", "queue2")
-h265parse = Gst.ElementFactory.make("h265parse", "h265parse")
+# h265parse = Gst.ElementFactory.make("h265parse", "h265parse")
 queue3 = Gst.ElementFactory.make("queue", "queue3")
 
 rtspclientsink = Gst.ElementFactory.make("rtspclientsink", "s")
@@ -51,9 +88,9 @@ opusparse = Gst.ElementFactory.make("opusparse", "opusparse")
 pipeline.add(v4l2src)
 pipeline.add(video_filter)
 pipeline.add(queue1)
-pipeline.add(mpph265enc)
+pipeline.add(video_encoder)
 pipeline.add(queue2)
-pipeline.add(h265parse)
+pipeline.add(video_parser)
 pipeline.add(queue3)
 pipeline.add(rtspclientsink)
 pipeline.add(alsasrc)
@@ -65,10 +102,10 @@ pipeline.add(opusparse)
 # 链接视频元素
 v4l2src.link(video_filter)
 video_filter.link(queue1)
-queue1.link(mpph265enc)
-mpph265enc.link(queue2)
-queue2.link(h265parse)
-h265parse.link(queue3)
+queue1.link(video_encoder)
+video_encoder.link(queue2)
+queue2.link(video_parser)
+video_parser.link(queue3)
 queue3.link(rtspclientsink)
 
 # 链接音频元素
@@ -92,7 +129,7 @@ rtpsession_elements = {
 
 for session_name, element in rtpsession_elements.items():
     if element:
-        print(f"Found {session_name} element", flush=True)
+        print(f"SignalON {session_name} element", flush=True)
     else:
         print(f"{session_name} element not found", flush=True)
 
@@ -116,7 +153,7 @@ def print_realtime_bitrate(rtpsession, session_name):
         stats = rtpsession.get_property("stats")
         if stats:
             realtime_bitrate = get_bitrate(stats)
-            print(f"Bitrate for {session_name}: {realtime_bitrate}", flush=True)
+            # print(f"Bitrate for {session_name}: {realtime_bitrate}", flush=True)
         else:
             print(f"Failed to retrieve stats property for {session_name}", flush=True)
     except Exception as e:
