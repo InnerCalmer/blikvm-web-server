@@ -8,7 +8,7 @@
     "file": {
       "enabled": true,
       "level": "trace",
-      "fileName": "/mnt/tmp/logs/app.log",
+      "fileName": "/root/logs/app.log",
       "flags": "a",
       "maxLogSize": 30,
       "backups": 3
@@ -28,7 +28,7 @@
       "key": "./lib/https/key.pem",
       "cert": "./lib/https/cert.pem"
     },
-    "rootPath": "/mnt/tmp/yueliang/blikvm-web-server",
+    "rootPath": "/root/work/blikvm-web-server",
     "configPath": "/usr/bin/blikvm/package.json",
     "sshUser": "blikvm",
     "sshPassword": "blikvm",
@@ -49,7 +49,7 @@
       "gop": 30,
       "resolution": "1920x1080",
       "decode": "h264",
-      "recordPath": "/mnt/tmp/record",
+      "recordPath": "/root/record",
       "recordBin": "./lib/pi/ustreamer-dump",
       "shell": "./lib/kvmd-video.sh"
     },
@@ -58,7 +58,7 @@
       "bin": "python3",
       "fps": 50,
       "quality": 80,
-      "kbps": 3000,
+      "kbps": 4500,
       "gop": 60,
       "resolution": "1920x1080",
       "decode": "h265"

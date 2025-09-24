@@ -70,19 +70,37 @@ queue2 = Gst.ElementFactory.make("queue", "queue2")
 queue3 = Gst.ElementFactory.make("queue", "queue3")
 
 rtspclientsink = Gst.ElementFactory.make("rtspclientsink", "s")
+if not rtspclientsink:
+    print("Error: Failed to create 'rtspclientsink'. GStreamer plugin likely missing.\n"
+          "Check that the 'rtspclientsink' element is available: run 'gst-inspect-1.0 rtspclientsink'.\n"
+          "Install packages providing it (e.g. on Debian/Ubuntu: 'apt install gstreamer1.0-rtsp' or the good/bad/ugly plugin sets).",
+          flush=True)
+    exit(1)
 rtspclientsink.set_property("latency", 0)
 rtspclientsink.set_property("location", "rtsp://127.0.0.1:8554/test")
 
 alsasrc = Gst.ElementFactory.make("alsasrc", "alsasrc")
+if not alsasrc:
+    print("Error: Failed to create 'alsasrc'. Ensure ALSA source element is available (package gstreamer1.0-alsa).", flush=True)
+    exit(1)
 alsasrc.set_property("device", "hw:1")
 audio_caps = Gst.Caps.from_string("audio/x-raw,rate=48000,channels=2")
 audio_filter = Gst.ElementFactory.make("capsfilter", "audio_filter")
+if not audio_filter:
+    print("Error: Failed to create audio capsfilter element.", flush=True)
+    exit(1)
 audio_filter.set_property("caps", audio_caps)
 
 queue4 = Gst.ElementFactory.make("queue", "queue4")
 opusenc = Gst.ElementFactory.make("opusenc", "opusenc")
+if not opusenc:
+    print("Error: Failed to create 'opusenc'. Install Opus encoder plugin (package gstreamer1.0-plugins-bad or libgstopus).", flush=True)
+    exit(1)
 opusenc.set_property("bitrate", 320000)
 opusparse = Gst.ElementFactory.make("opusparse", "opusparse")
+if not opusparse:
+    print("Error: Failed to create 'opusparse'. Install parser plugin (likely gstreamer1.0-plugins-bad).", flush=True)
+    exit(1)
 
 # 将元素逐个添加到管道中
 pipeline.add(v4l2src)
@@ -153,7 +171,7 @@ def print_realtime_bitrate(rtpsession, session_name):
         stats = rtpsession.get_property("stats")
         if stats:
             realtime_bitrate = get_bitrate(stats)
-            # print(f"Bitrate for {session_name}: {realtime_bitrate}", flush=True)
+            print(f"Bitrate for {session_name}: {realtime_bitrate}", flush=True)
         else:
             print(f"Failed to retrieve stats property for {session_name}", flush=True)
     except Exception as e:

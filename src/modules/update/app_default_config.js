@@ -27,7 +27,7 @@ const defaultConfig = {
       "file": {
         "enabled": true,
         "level": "trace",
-        "fileName": "/mnt/tmp/logs/app.log",
+        "fileName": "/root/logs/app.log",
         "flags": "a",
         "maxLogSize": 30,
         "backups": 3
@@ -67,7 +67,7 @@ const defaultConfig = {
       "kbps": 2000,
       "gop": 30,
       "resolution": "1920x1080",
-      "recordPath": "/mnt/tmp/record",
+      "recordPath": "/root/record",
       "recordBin": `./lib/${hardware}/ustreamer-dump`
     },
     "janus": {

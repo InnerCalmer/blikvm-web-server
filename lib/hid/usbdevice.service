@@ -1,0 +1,16 @@
+[Unit]
+Description=USB Gadget (keyboard/mouse) setup
+After=sys-kernel-config.mount local-fs.target
+ConditionPathExists=/sys/kernel/config
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=SCRIPT_DIR=/root/work/blikvm-web-server/lib/hid
+Environment=MOUSE_MODE=absolute
+ExecStartPre=/usr/bin/env bash -c 'test -d /sys/kernel/config/usb_gadget/rockchip && echo "(reusing existing gadget)" || true'
+ExecStart=/usr/bin/env bash -c 'cd ${SCRIPT_DIR} && bash enable-gadget.sh mouse_mode=${MOUSE_MODE} msd=disable'
+ExecStop=/usr/bin/env bash -c 'cd ${SCRIPT_DIR} && bash clean-gadget.sh'
+
+[Install]
+WantedBy=multi-user.target

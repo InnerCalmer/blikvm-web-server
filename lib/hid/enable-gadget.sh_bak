@@ -40,15 +40,11 @@ USB_KEYBOARD_FUNCTIONS_DIR="functions/hid.keyboard"
 USB_MOUSE_ABS_FUNCTIONS_DIR="functions/hid.mouse0"
 USB_MOUSE_REL_FUNCTIONS_DIR="functions/hid.mouse1"
 
-KEYBOARD_FUNC="hid.keyboard"
-MOUSE_ABS_FUNC="hid.mouse0"
-MOUSE_REL_FUNC="hid.mouse1"
-
 USB_MASS_STORAGE_NAME="mass_storage.0"
 USB_MASS_STORAGE_FUNCTIONS_DIR="functions/${USB_MASS_STORAGE_NAME}"
 
 USB_CONFIG_INDEX=1
-USB_CONFIG_DIR="configs/c.${USB_CONFIG_INDEX}"
+USB_CONFIG_DIR="configs/b.${USB_CONFIG_INDEX}"
 USB_ALL_CONFIGS_DIR="configs/*"
 USB_ALL_FUNCTIONS_DIR="functions/*"
 USB_MSD_DIR="/mnt/msd/ventoy"
@@ -76,7 +72,9 @@ modprobe libcomposite
 #modprobe configfs
 modprobe usb_f_mass_storage
 
+
 cd "${USB_GADGET_PATH}"
+
 mkdir -p "${USB_DEVICE_DIR}"
 cd "${USB_DEVICE_DIR}"
 
@@ -105,9 +103,11 @@ if ls ${USB_DEVICE_PATH}/configs 1>/dev/null 2>&1; then
   done
 fi
 
+
+
 echo 0x1d6b > idVendor  # Linux Foundation
-echo 0x0108 > idProduct # Multifunction Composite Gadget
-echo 0x0104 > bcdDevice # v1.0.0
+echo 0x0106 > idProduct # Multifunction Composite Gadget
+echo 0x0100 > bcdDevice # v1.0.0
 echo 0x0200 > bcdUSB    # USB2
 
 mkdir -p "$USB_STRINGS_DIR"
@@ -321,19 +321,18 @@ CONFIGS_STRINGS_DIR="${USB_CONFIG_DIR}/${USB_STRINGS_DIR}"
 mkdir -p "${CONFIGS_STRINGS_DIR}"
 echo "Config ${USB_CONFIG_INDEX}: ECM network" > "${CONFIGS_STRINGS_DIR}/configuration"
 
-ln -s "${USB_KEYBOARD_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/${KEYBOARD_FUNC}"
-
+ln -s "${USB_KEYBOARD_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/"
 if [[ -d "${USB_MOUSE_ABS_FUNCTIONS_DIR}" ]]; then
-  ln -s "${USB_MOUSE_ABS_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/${MOUSE_ABS_FUNC}"
+  ln -s "${USB_MOUSE_ABS_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/"
 fi
 if [[ -d "${USB_MOUSE_REL_FUNCTIONS_DIR}" ]]; then
-  ln -s "${USB_MOUSE_REL_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/${MOUSE_REL_FUNC}"
+  ln -s "${USB_MOUSE_REL_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/"
 fi
 
 #config config.1 link
 if [ -f "$MSD_FILE" ] 
 then
-	ln -s "${USB_MASS_STORAGE_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/${USB_MASS_STORAGE_NAME}"
+	ln -s "${USB_MASS_STORAGE_FUNCTIONS_DIR}" "${USB_CONFIG_DIR}/"
 fi
 
 ls /sys/class/udc > "${USB_DEVICE_PATH}/UDC"
