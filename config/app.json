@@ -68,7 +68,7 @@
     "bin": "./lib/rk3566/kvmd-main"
   },
   "display": {
-    "mode": "interval",
+    "mode": "always",
     "onBootTime": 3600,
     "cycleInterval": 60,
     "displayTime": 20,
